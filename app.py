@@ -10,13 +10,12 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 # ------------------ Streamlit Setup ------------------
 st.set_page_config(page_title="StudyMate", layout="wide")
 
-# Logo Banner
-st.image("https://copilot.microsoft.com/th/id/BCO.653c6183-47ca-4ed0-9d41-7dc716dd0871.png", width=180)
-st.markdown("<h1 style='text-align:center;'>📘 StudyMate – Academic PDF Q&A Assistant</h1>", unsafe_allow_html=True)
-
-# Custom Styling
+# Background Gradient & Styling
 st.markdown("""
 <style>
+body {
+  background: linear-gradient(to bottom right, #f0f4f8, #dbe9ff);
+}
 .answer-box {
   background: #e6ffe6;
   border: 1px solid #b3ffb3;
@@ -43,6 +42,10 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
+
+# Logo & Title
+st.image("https://copilot.microsoft.com/th/id/BCO.653c6183-47ca-4ed0-9d41-7dc716dd0871.png", width=180)
+st.markdown("<h1 style='text-align:center;'>📘 StudyMate – Academic PDF Q&A Assistant</h1>", unsafe_allow_html=True)
 
 # ------------------ Cache & Helpers ------------------
 @st.cache_resource
@@ -90,12 +93,38 @@ def load_granite(hf_token: str):
 def get_hf_token():
     return st.session_state.get("hf_token") or os.getenv("HF_TOKEN", "")
 
+# ------------------ Session State Initialization ------------------
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "history" not in st.session_state:
+    st.session_state.history = []
+
 # ------------------ Sidebar ------------------
 with st.sidebar:
-    st.markdown("<div class='sidebar-title'>🔧 Settings</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sidebar-title'>🔧 Settings / Login</div>", unsafe_allow_html=True)
+
+    # Hugging Face Token
     hf_token_input = st.text_input("HF Token", type="password", placeholder="hf_...")
     if hf_token_input:
         st.session_state.hf_token = hf_token_input
+
+    st.markdown("---")
+    # Simple Login
+    if not st.session_state.logged_in:
+        username = st.text_input("Username", key="login_user")
+        password = st.text_input("Password", type="password", key="login_pass")
+        if st.button("Login"):
+            if username.strip() and password.strip():
+                st.session_state.logged_in = True
+                st.success("✅ Login successful!")
+                st.rerun()
+            else:
+                st.error("Enter valid credentials!")
+    else:
+        st.success("Logged in ✅")
+        if st.button("Logout"):
+            st.session_state.logged_in = False
+            st.rerun()
 
     st.markdown("---")
     st.markdown("<div class='sidebar-title'>📘 About StudyMate</div>", unsafe_allow_html=True)
@@ -105,6 +134,10 @@ with st.sidebar:
 - Features: Semantic search, traceable answers, multi-chunk context, session history  
 - Built at: Cognitive X Hackathon  
 """)
+
+# ------------------ Stop if not logged in ------------------
+if not st.session_state.logged_in:
+    st.stop()
 
 # ------------------ File Upload ------------------
 uploaded_files = st.file_uploader("Upload one or more academic PDFs", type="pdf", accept_multiple_files=True)
@@ -133,10 +166,6 @@ if full_text.strip():
     with st.spinner("🔍 Building FAISS index... Please wait."):
         index, _ = build_faiss_index(chunks, embedder)
     st.success(f"✅ Indexed {len(chunks)} chunks successfully!")
-
-# ------------------ Session History ------------------
-if "history" not in st.session_state:
-    st.session_state.history = []
 
 # ------------------ Q&A Loop ------------------
 def qa_loop():
